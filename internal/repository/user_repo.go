@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/Masterminds/squirrel"
 	"github.com/go-chi/chi/v5"
 	"log"
 	"net/http"
@@ -11,8 +12,14 @@ import (
 	"time"
 )
 
+var psql = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
+
 type Repo struct {
 	DB *sql.DB
+}
+
+func NewRepo(db *sql.DB) *Repo {
+	return &Repo{DB: db}
 }
 
 type User struct {
@@ -26,15 +33,15 @@ type User struct {
 func (s *Repo) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("createUserHandler started")
 
-	info := &User{}
+	info := User{}
 
 	if err := json.NewDecoder(r.Body).Decode(&info); err != nil {
 		http.Error(w, "failed to decode data", http.StatusBadRequest)
 		return
 	}
 
-	if info.Name == "" || info.Email == "" {
-		http.Error(w, "name or email are required", http.StatusBadRequest)
+	if info.Name == "" || info.Email == "" || info.Age <= 0 {
+		http.Error(w, "name, email and age are required and age must be positive", http.StatusBadRequest)
 		return
 	}
 
@@ -45,8 +52,20 @@ func (s *Repo) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now(),
 	}
 
-	sql := `INSERT INTO users (name, age, email, created_at) VALUES ($1, $2, $3, $4) RETURNING id`
-	err := s.DB.QueryRow(sql, user.Name, user.Age, user.Email, user.CreatedAt).Scan(&user.ID)
+	queryBuilder := psql.Insert("users"). // Вот тут важно — `psql`, а не `squirrel`
+						Columns("name", "age", "email", "created_at").
+						Values(user.Name, user.Age, user.Email, user.CreatedAt).
+						Suffix("RETURNING id")
+
+	sql, args, err := queryBuilder.ToSql()
+	if err != nil {
+		http.Error(w, "failed to build query", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("SQL: %s, ARGS: %+v", sql, args)
+
+	err = s.DB.QueryRow(sql, args...).Scan(&user.ID)
 	if err != nil {
 		log.Printf("failed to create user: %v", err)
 		http.Error(w, fmt.Sprintf("failed to create user: %v", err), http.StatusBadRequest)
@@ -68,8 +87,17 @@ func (s *Repo) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sql := `SELECT * FROM users WHERE id = $1`
-	row := s.DB.QueryRow(sql, id)
+	queryBuilder := psql.Select("*"). // Тут тоже psql
+						From("users").
+						Where(squirrel.Eq{"id": id})
+
+	sql, args, err := queryBuilder.ToSql()
+	if err != nil {
+		http.Error(w, "failed to build query", http.StatusInternalServerError)
+		return
+	}
+
+	row := s.DB.QueryRow(sql, args...)
 
 	user := &User{}
 	err = row.Scan(&user.ID, &user.Name, &user.Age, &user.Email, &user.CreatedAt)
@@ -82,5 +110,4 @@ func (s *Repo) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(user); err != nil {
 		http.Error(w, "failed to write user", http.StatusInternalServerError)
 	}
-
 }
