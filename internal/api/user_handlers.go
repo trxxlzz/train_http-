@@ -1,4 +1,4 @@
-package repository
+package api
 
 import (
 	"database/sql"
@@ -14,9 +14,16 @@ import (
 
 var psql = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 
-type Repo struct {
+type UserHandler interface {
+	CreateUserHandler(w http.ResponseWriter, r *http.Request)
+	GetUserHandler(w http.ResponseWriter, r *http.Request)
+}
+
+type UserAPI struct {
 	DB *sql.DB
 }
+
+var _ UserHandler = (*UserAPI)(nil)
 
 type User struct {
 	ID        int       `json:"id"`
@@ -26,7 +33,7 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (s *Repo) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
+func (s *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("createUserHandler started")
 
 	info := User{}
@@ -75,7 +82,7 @@ func (s *Repo) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Repo) GetUserHandler(w http.ResponseWriter, r *http.Request) {
+func (s *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	idParam := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
@@ -106,4 +113,9 @@ func (s *Repo) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(user); err != nil {
 		http.Error(w, "failed to write user", http.StatusInternalServerError)
 	}
+}
+
+func RegisterUserRoutes(r chi.Router, handler UserHandler) {
+	r.Post("/users", handler.CreateUserHandler)
+	r.Get("/users/{id}", handler.GetUserHandler)
 }

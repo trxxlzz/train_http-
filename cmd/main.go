@@ -1,20 +1,18 @@
 package main
 
 import (
-	"database/sql"
 	"github.com/go-chi/chi/v5"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/joho/godotenv"
 	"log"
 	"net/http"
 	"os"
-	"training/internal/repository"
+	"training/internal/api"
+	"training/internal/infra"
 )
 
 const (
-	baseUrl    = "localhost:8081"
-	createUser = "/users"
-	getUser    = "/users/{id}"
+	baseUrl = "localhost:8081"
 )
 
 func main() {
@@ -28,22 +26,17 @@ func main() {
 	}
 
 	log.Printf("Connecting to DB: %s", dsn)
-	db, err := sql.Open("pgx", dsn)
+	db, err := infra.InitDB()
 	if err != nil {
 		log.Fatal("Failed to open db", err)
 	}
 	defer db.Close()
 
-	if err := db.Ping(); err != nil {
-		log.Fatal("Failed to connect to DB:", err)
-	}
-
-	repo := &repository.Repo{DB: db}
+	userAPI := &api.UserAPI{DB: db}
 
 	r := chi.NewRouter()
 
-	r.Post(createUser, repo.CreateUserHandler)
-	r.Get(getUser, repo.GetUserHandler)
+	api.RegisterUserRoutes(r, userAPI)
 
 	log.Printf("Starting server on %s", baseUrl)
 	err = http.ListenAndServe(baseUrl, r)
