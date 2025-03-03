@@ -18,10 +18,6 @@ type Repo struct {
 	DB *sql.DB
 }
 
-func NewRepo(db *sql.DB) *Repo {
-	return &Repo{DB: db}
-}
-
 type User struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`
@@ -87,9 +83,9 @@ func (s *Repo) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queryBuilder := psql.Select("*"). // Тут тоже psql
-						From("users").
-						Where(squirrel.Eq{"id": id})
+	queryBuilder := psql.Select("*").
+		From("users").
+		Where(squirrel.Eq{"id": id})
 
 	sql, args, err := queryBuilder.ToSql()
 	if err != nil {
