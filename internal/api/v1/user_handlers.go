@@ -1,4 +1,4 @@
-package api
+package v1
 
 import (
 	"encoding/json"
@@ -6,18 +6,18 @@ import (
 	"net/http"
 	"strconv"
 	"training/internal/models"
-	"training/internal/service"
+	"training/internal/service/v1"
 )
 
-type UserHandler struct {
-	service service.UserService
+type UserHandlerV1 struct {
+	service v1.UserService
 }
 
-func NewUserHandler(s service.UserService) *UserHandler {
-	return &UserHandler{service: s}
+func NewUserHandler(s v1.UserService) *UserHandlerV1 {
+	return &UserHandlerV1{service: s}
 }
 
-func (h *UserHandler) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandlerV1) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -34,7 +34,7 @@ func (h *UserHandler) CreateUserHandler(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(user)
 }
 
-func (h *UserHandler) GetUserHandler(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandlerV1) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -52,7 +52,7 @@ func (h *UserHandler) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-func RegisterUserRoutes(r chi.Router, handler *UserHandler) {
-	r.Post("/users", handler.CreateUserHandler)
-	r.Get("/users/{id}", handler.GetUserHandler)
-}
+//func RegisterUserRoutes(r chi.Router, handler *UserHandler) {
+//	r.Post("/users", handler.CreateUserHandler)
+//	r.Get("/users/{id}", handler.GetUserHandler)
+//}

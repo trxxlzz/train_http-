@@ -11,6 +11,9 @@ var psql = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
 type UserRepository interface {
 	CreateUser(user *models.User) error
 	GetUserByID(id int) (*models.User, error)
+
+	CreateUserV2(user *models.UserV2) error
+	GetUserByIDV2(id int) (*models.UserV2, error)
 }
 
 type userRepo struct {
@@ -51,4 +54,36 @@ func (r *userRepo) GetUserByID(id int) (*models.User, error) {
 	}
 
 	return user, nil
+}
+
+func (r *userRepo) CreateUserV2(user *models.UserV2) error {
+	query, args, err := psql.Insert("users_v2").
+		Columns("full_name", "email", "age", "created_at").
+		Values(user.FullName, user.Email, user.Age, user.CreatedAt).
+		ToSql()
+	if err != nil {
+		return err
+	}
+
+	_, err = r.db.Exec(query, args...)
+	return err
+}
+
+func (r *userRepo) GetUserByIDV2(id int) (*models.UserV2, error) {
+	query, args, err := psql.Select("id, full_name, email, age, created_at").
+		From("users_v2").
+		Where(squirrel.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return nil, err
+	}
+
+	row := r.db.QueryRow(query, args...)
+	var user models.UserV2
+	err = row.Scan(&user.ID, &user.FullName, &user.Email, &user.Age, &user.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }

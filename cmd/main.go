@@ -7,10 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"training/internal/api"
+	"training/internal/api/v1"
+	v2 "training/internal/api/v2"
 	"training/internal/infra"
 	"training/internal/repository"
-	"training/internal/service"
+	serviceV1 "training/internal/service/v1"
+	serviceV2 "training/internal/service/v2"
 )
 
 func main() {
@@ -30,11 +32,22 @@ func main() {
 	defer db.Close()
 
 	userRepo := repository.NewUserRepository(db)
-	userService := service.NewUserService(userRepo)
-	userHandler := api.NewUserHandler(userService)
+
+	userServiceV1 := serviceV1.NewUserService(userRepo)
+	userHandlerV1 := v1.NewUserHandler(userServiceV1)
+
+	userServiceV2 := serviceV2.NewUserServiceV2(userRepo)
+	userHandlerV2 := v2.NewUserHandlerV2(userServiceV2)
 
 	r := chi.NewRouter()
-	api.RegisterUserRoutes(r, userHandler)
+
+	r.Route("/api/v1", func(r chi.Router) {
+		v1.RegisterUserRoutesV1(r, userHandlerV1)
+	})
+
+	r.Route("/api/v2", func(r chi.Router) {
+		v2.RegisterUserRoutesV2(r, userHandlerV2)
+	})
 
 	log.Println("Server running at localhost:8081")
 	log.Fatal(http.ListenAndServe("localhost:8081", r))
