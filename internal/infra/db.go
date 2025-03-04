@@ -9,7 +9,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// InitDB отвечает за подключение к БД и возвращает `*sql.DB`.
 func InitDB() (*sql.DB, error) {
 	if err := godotenv.Load(".env"); err != nil {
 		return nil, fmt.Errorf("failed to load .env file: %w", err)

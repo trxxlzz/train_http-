@@ -1,121 +1,58 @@
 package api
 
 import (
-	"database/sql"
 	"encoding/json"
-	"fmt"
-	"github.com/Masterminds/squirrel"
 	"github.com/go-chi/chi/v5"
-	"log"
 	"net/http"
 	"strconv"
-	"time"
+	"training/internal/models"
+	"training/internal/service"
 )
 
-var psql = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
-
-type UserHandler interface {
-	CreateUserHandler(w http.ResponseWriter, r *http.Request)
-	GetUserHandler(w http.ResponseWriter, r *http.Request)
+type UserHandler struct {
+	service service.UserService
 }
 
-type UserAPI struct {
-	DB *sql.DB
+func NewUserHandler(s service.UserService) *UserHandler {
+	return &UserHandler{service: s}
 }
 
-var _ UserHandler = (*UserAPI)(nil)
+func (h *UserHandler) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
+	var user models.User
 
-type User struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
-	Age       int       `json:"age"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-func (s *UserAPI) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("createUserHandler started")
-
-	info := User{}
-
-	if err := json.NewDecoder(r.Body).Decode(&info); err != nil {
-		http.Error(w, "failed to decode data", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		http.Error(w, "invalid input", http.StatusBadRequest)
 		return
 	}
 
-	if info.Name == "" || info.Email == "" || info.Age <= 0 {
-		http.Error(w, "name, email and age are required and age must be positive", http.StatusBadRequest)
-		return
-	}
-
-	user := &User{
-		Name:      info.Name,
-		Age:       info.Age,
-		Email:     info.Email,
-		CreatedAt: time.Now(),
-	}
-
-	queryBuilder := psql.Insert("users"). // Вот тут важно — `psql`, а не `squirrel`
-						Columns("name", "age", "email", "created_at").
-						Values(user.Name, user.Age, user.Email, user.CreatedAt).
-						Suffix("RETURNING id")
-
-	sql, args, err := queryBuilder.ToSql()
-	if err != nil {
-		http.Error(w, "failed to build query", http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("SQL: %s, ARGS: %+v", sql, args)
-
-	err = s.DB.QueryRow(sql, args...).Scan(&user.ID)
-	if err != nil {
-		log.Printf("failed to create user: %v", err)
-		http.Error(w, fmt.Sprintf("failed to create user: %v", err), http.StatusBadRequest)
+	if err := h.service.CreateUser(&user); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	w.Header().Set("content-type", "application/json")
-	if err := json.NewEncoder(w).Encode(user); err != nil {
-		http.Error(w, "failed to write user", http.StatusBadRequest)
-	}
+	json.NewEncoder(w).Encode(user)
 }
 
-func (s *UserAPI) GetUserHandler(w http.ResponseWriter, r *http.Request) {
-	idParam := chi.URLParam(r, "id")
-	id, err := strconv.Atoi(idParam)
+func (h *UserHandler) GetUserHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "id not found", http.StatusBadRequest)
+		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	queryBuilder := psql.Select("*").
-		From("users").
-		Where(squirrel.Eq{"id": id})
-
-	sql, args, err := queryBuilder.ToSql()
+	user, err := h.service.GetUserByID(id)
 	if err != nil {
-		http.Error(w, "failed to build query", http.StatusInternalServerError)
+		http.Error(w, "user not found", http.StatusNotFound)
 		return
 	}
 
-	row := s.DB.QueryRow(sql, args...)
-
-	user := &User{}
-	err = row.Scan(&user.ID, &user.Name, &user.Age, &user.Email, &user.CreatedAt)
-	if err != nil {
-		http.Error(w, "failed to fetch user", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("content-type", "application/json")
-	if err := json.NewEncoder(w).Encode(user); err != nil {
-		http.Error(w, "failed to write user", http.StatusInternalServerError)
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
 }
 
-func RegisterUserRoutes(r chi.Router, handler UserHandler) {
+func RegisterUserRoutes(r chi.Router, handler *UserHandler) {
 	r.Post("/users", handler.CreateUserHandler)
 	r.Get("/users/{id}", handler.GetUserHandler)
 }

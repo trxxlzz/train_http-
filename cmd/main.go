@@ -9,10 +9,8 @@ import (
 	"os"
 	"training/internal/api"
 	"training/internal/infra"
-)
-
-const (
-	baseUrl = "localhost:8081"
+	"training/internal/repository"
+	"training/internal/service"
 )
 
 func main() {
@@ -25,22 +23,19 @@ func main() {
 		log.Fatal("DATABASE_URL is not set")
 	}
 
-	log.Printf("Connecting to DB: %s", dsn)
 	db, err := infra.InitDB()
 	if err != nil {
-		log.Fatal("Failed to open db", err)
+		log.Fatal("Failed to connect to DB", err)
 	}
 	defer db.Close()
 
-	userAPI := &api.UserAPI{DB: db}
+	userRepo := repository.NewUserRepository(db)
+	userService := service.NewUserService(userRepo)
+	userHandler := api.NewUserHandler(userService)
 
 	r := chi.NewRouter()
+	api.RegisterUserRoutes(r, userHandler)
 
-	api.RegisterUserRoutes(r, userAPI)
-
-	log.Printf("Starting server on %s", baseUrl)
-	err = http.ListenAndServe(baseUrl, r)
-	if err != nil {
-		log.Fatal(err)
-	}
+	log.Println("Server running at localhost:8081")
+	log.Fatal(http.ListenAndServe("localhost:8081", r))
 }
